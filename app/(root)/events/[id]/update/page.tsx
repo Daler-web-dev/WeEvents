@@ -1,13 +1,20 @@
 import EventForm from "@/components/shared/EventForm";
+import { getEventById } from "@/lib/actions/event.actions";
+import { UpdateEventParams } from "@/types";
 import { auth } from "@clerk/nextjs";
 import React from "react";
 
-interface pageProps {}
 
-const UpdateEvent: React.FC<pageProps> = () => {
+type UpdateEventProps = {
+	params: {
+		id: string
+	}
+}
+
+const UpdateEvent = async ({params: {id}}: UpdateEventProps) => {
 	const { sessionClaims } = auth();
-
 	const userId = sessionClaims?.userId as string;
+	const event = await getEventById(id)
 
 	return (
 		<>
@@ -17,7 +24,12 @@ const UpdateEvent: React.FC<pageProps> = () => {
 				</h3>
 			</section>
 			<div className="wrapper my-8">
-				<EventForm userId={userId} type="Update" />
+				<EventForm 
+					userId={userId} 
+					event={event} 
+					eventId={event._id} 
+					type="Update" 
+				/>
 			</div>
 		</>
 	);

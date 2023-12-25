@@ -16,7 +16,7 @@ import {
 	FormMessage,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import {useUploadThing} from '@/lib/uploadthing'
+import { useUploadThing } from "@/lib/uploadthing";
 
 import { Input } from "@/components/ui/input";
 import { eventFormSchema } from "@/lib/validator";
@@ -26,19 +26,34 @@ import { FileUploader } from "./FileUploader";
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { createEvent } from "@/lib/actions/event.actions";
+import { createEvent, updateEvent } from "@/lib/actions/event.actions";
+import { IEvent } from "@/lib/database/models/event.model";
 
 interface EventFormProps {
 	userId: string;
 	type: "Create" | "Update";
+	event?: IEvent;
+	eventId?: string;
 }
 
-const EventForm: React.FC<EventFormProps> = ({ userId, type }) => {
+const EventForm: React.FC<EventFormProps> = ({
+	userId,
+	type,
+	event,
+	eventId,
+}) => {
 	const [files, setFiles] = useState<File[]>([]);
-	const initialValues = eventDefaultValues;
-	const router = useRouter()
+	const initialValues =
+		event && type === "Update"
+			? {
+					...event,
+					startDateTime: new Date(event.startDateTime),
+					endDateTime: new Date(event.startDateTime),
+			  }
+			: eventDefaultValues;
+	const router = useRouter();
 
-	const {startUpload} = useUploadThing('imageUploader')
+	const { startUpload } = useUploadThing("imageUploader");
 
 	const form = useForm<z.infer<typeof eventFormSchema>>({
 		resolver: zodResolver(eventFormSchema),
@@ -47,38 +62,53 @@ const EventForm: React.FC<EventFormProps> = ({ userId, type }) => {
 
 	// 2. Define a submit handler.
 	async function onSubmit(values: z.infer<typeof eventFormSchema>) {
-		const eventData = values
+		const eventData = values;
 
-		let uploadedImageUrl = values.imageUrl
+		let uploadedImageUrl = values.imageUrl;
 
-		if(files.length > 0) {
-			const uploadedImages = await startUpload(files)
+		if (files.length > 0) {
+			const uploadedImages = await startUpload(files);
 
-			if(!uploadedImages) {
+			if (!uploadedImages) {
+				return;
+			}
+
+			uploadedImageUrl = uploadedImages[0].url;
+		}
+
+		if (type === "Create") {
+			try {
+				const newEvent = await createEvent({
+					event: { ...values, imageUrl: uploadedImageUrl },
+					userId,
+					path: "/profile",
+				});
+
+				if (newEvent) {
+					form.reset();
+					router.push(`/events/${newEvent._id}`);
+				}
+			} catch (error) {}
+		}
+		if (type === "Update") {
+			if(!eventId) {
+				router.back()
 				return
 			}
 
-			uploadedImageUrl = uploadedImages[0].url
-		}
-
-		if(type === 'Create') {
 			try {
-				const newEvent = await createEvent({
-					event: { ...values, imageUrl: uploadedImageUrl},
+				const updatedEvent = await updateEvent({
+					event: { ...values, imageUrl: uploadedImageUrl, _id: eventId },
 					userId,
-					path: "/profile"
-				})
+					path: `/events/${eventId}`,
+				});
 
-				if(newEvent) {
-					form.reset()
-					router.push(`/events/${newEvent._id}`)
+				if (updatedEvent) {
+					form.reset();
+					router.push(`/events/${updatedEvent._id}`);
 				}
-
-			} catch(error) {
-
-			}
+			} catch (error) {}
 		}
-
 	}
 	return (
 		<Form {...form}>
@@ -289,8 +319,12 @@ const EventForm: React.FC<EventFormProps> = ({ userId, type }) => {
 															<Checkbox
 																id="isFree"
 																className="mr-2 h-5 w-5 border-2 border-primary-500"
-																onCheckedChange={field.onChange}
-																checked={field.value}
+																onCheckedChange={
+																	field.onChange
+																}
+																checked={
+																	field.value
+																}
 															/>
 														</div>
 													</FormControl>
@@ -331,13 +365,15 @@ const EventForm: React.FC<EventFormProps> = ({ userId, type }) => {
 					/>
 				</div>
 
-				<Button 
+				<Button
 					type="submit"
 					size="lg"
 					disabled={form.formState.isSubmitting}
 					className="button col-span-2 w-full"
 				>
-					{form.formState.isSubmitting ? "Submitting..." : `${type} Event`}
+					{form.formState.isSubmitting
+						? "Submitting..."
+						: `${type} Event`}
 				</Button>
 			</form>
 		</Form>
